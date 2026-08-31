@@ -31,8 +31,8 @@ let touchStartY = 0;
 let touchStartTime = 0;
 let touchMoved = false;
 let touchOnPoint = false;
-let initialPinchDistance = 0; // Distância inicial entre os dois dedos
-let initialZoomScale = 1;     // Nível de zoom no momento em que o toque duplo começou
+let initialPinchDistance = 0; 
+let initialZoomScale = 1;     
 
 // --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -214,7 +214,9 @@ function processarTopconGTS(conteudoTexto) {
         };
         let esteVal = parseCoordTopcon(rawX);
         let norteVal = parseCoordTopcon(rawY);
-        let cotaVal = parseCoordTopcon(rawZ);
+        // Z tratado sem divisão por 1000 por padrão (conforme solicitado para elevação)
+        let cotaVal = rawZ ? parseFloat(rawZ.replace(',', '.')) : 0.0; 
+        
         if (!isNaN(esteVal) && !isNaN(norteVal)) {
             pontos.push({ id: id, e: esteVal, este: esteVal, n: norteVal, norte: norteVal, z: isNaN(cotaVal) ? 0 : cotaVal, cota: isNaN(cotaVal) ? 0 : cotaVal, desc: 'Topcon GTS' });
             carregados++; indexAuto++;
@@ -229,7 +231,7 @@ function processarTopconGTS(conteudoTexto) {
                 let id = line.substring(0, posX).replace(/[_+|]/g, '').trim() || `P${pontos.length + 1}`;
                 const esteVal = parseInt(line.substring(posX + 2, posX + 11), 10) / 1000;
                 const norteVal = parseInt(line.substring(posY + 2, posY + 11), 10) / 1000;
-                const cotaVal = posZ !== -1 ? parseInt(line.substring(posZ + 2, posZ + 11), 10) / 1000 : 0;
+                const cotaVal = posZ !== -1 ? parseFloat(line.substring(posZ + 2, posZ + 11).trim()) : 0;
                 if (!isNaN(esteVal) && !isNaN(norteVal)) {
                     pontos.push({ id, e: esteVal, este: esteVal, n: norteVal, norte: norteVal, z: cotaVal, cota: cotaVal, desc: 'GTS' });
                     carregados++;
@@ -277,7 +279,8 @@ function exportarXYZ_GTS() {
         let zVal = p.z !== undefined ? p.z : p.cota;
         const x = Math.max(0, Math.round((xVal || 0) * 1000)).toString().padStart(9, '0');
         const y = Math.max(0, Math.round((yVal || 0) * 1000)).toString().padStart(9, '0');
-        const z = Math.max(0, Math.round((zVal || 0) * 1000)).toString().padStart(9, '0');
+        // Z mantido sem multiplicar por 1000
+        const z = Math.max(0, Math.round((zVal || 0))).toString().padStart(9, '0');
         const idPadded = p.id.slice(0, 10).padEnd(10, ' ');
         content += `+${idPadded} _111111111100  x+${x}  y+${y}  z+${z}\r\n`;
     });
@@ -403,14 +406,12 @@ function inicializarCanvas() {
     ctx = canvas.getContext('2d');
     ajustarTamanhoCanvas();
 
-    // MOUSE (DESKTOP)
     canvas.addEventListener('mousedown', onCanvasMouseDown);
     window.addEventListener('mousemove', onCanvasMouseMove);
     window.addEventListener('mouseup', onCanvasMouseUp);
     canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
     canvas.addEventListener('click', onCanvasClick);
 
-    // TOQUE (MOBILE) - COM PINCH ZOOM
     canvas.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
     canvas.addEventListener('touchend', onCanvasTouchEnd, { passive: false });
@@ -591,7 +592,6 @@ function desenharCroqui() {
     });
 }
 
-// --- MOUSE (DESKTOP) ---
 function onCanvasMouseDown(e) {
     if ((e.ctrlKey && e.button === 0) || modoCroqui === 'pan' || e.button === 1) {
         isDragging = true;
@@ -633,7 +633,6 @@ function onCanvasClick(e) {
     }
 }
 
-// --- TOQUE (MOBILE) - COM SUPORTE A PINCH ZOOM ESTILO GOOGLE MAPS ---
 function onCanvasTouchStart(e) {
     if (e.touches.length === 1) {
         let touch = e.touches[0];
@@ -659,13 +658,11 @@ function onCanvasTouchStart(e) {
         }
         e.preventDefault();
     } else if (e.touches.length === 2) {
-        // Início do gesto de pinça
         isDragging = false;
         touchOnPoint = false;
         let t1 = e.touches[0];
         let t2 = e.touches[1];
         
-        // Calcula a distância inicial entre os dedos
         initialPinchDistance = Math.sqrt((t2.clientX - t1.clientX) ** 2 + (t2.clientY - t1.clientY) ** 2);
         initialZoomScale = zoomScale;
         e.preventDefault();
@@ -711,8 +708,6 @@ function onCanvasTouchMove(e) {
         if (initialPinchDistance > 0) {
             let scale = currentDistance / initialPinchDistance;
             let newZoomScale = initialZoomScale * scale;
-            
-            // Limites de zoom para evitar perda de performance ou inversão da tela
             newZoomScale = Math.max(0.1, Math.min(newZoomScale, 50));
             
             let rect = canvas.getBoundingClientRect();
@@ -720,9 +715,6 @@ function onCanvasTouchMove(e) {
             let centerY = ((t1.clientY + t2.clientY) / 2) - rect.top;
             
             let ratio = newZoomScale / zoomScale;
-            
-            // Ajusta o deslocamento (pan) para que o ponto central entre os dedos 
-            // permaneça exatamente no mesmo lugar na tela (efeito Google Maps).
             panOffsetX = panOffsetX * ratio + (centerX - canvas.width / 2) * (1 - ratio);
             panOffsetY = panOffsetY * ratio + (centerY - canvas.height / 2) * (1 - ratio);
             
@@ -734,7 +726,6 @@ function onCanvasTouchMove(e) {
 
 function onCanvasTouchEnd(e) {
     if (e.touches.length === 0) {
-        // Todos os dedos foram levantados
         if (!touchMoved && touchStartTime) {
             let pontoTocado = obterPontoProximoMouse(touchStartX, touchStartY);
             if (pontoTocado) {
@@ -746,9 +737,7 @@ function onCanvasTouchEnd(e) {
         touchStartTime = 0;
         touchMoved = false;
         initialPinchDistance = 0;
-        
     } else if (e.touches.length === 1) {
-        // Transição suave de 2 para 1 dedo: reinicia o estado de pinça e prepara para arrastar
         initialPinchDistance = 0;
         let touch = e.touches[0];
         let rect = canvas.getBoundingClientRect();
@@ -786,8 +775,6 @@ function limparLinhas() {
     if (resBox) resBox.classList.add('hidden');
     desenharCroqui();
 }
-
-
 
 /* ==========================================================================
 CALCULADORAS TOPOGRÁFICAS
@@ -862,26 +849,15 @@ function calcularLocacaoUI() {
     }
 }
 
-function calc2Pontos() {
-    let id1 = document.getElementById('p1')?.value;
-    let id2 = document.getElementById('p2')?.value;
-    let pt1 = pontos.find(p => p.id === id1);
-    let pt2 = pontos.find(p => p.id === id2);
-    let res = document.getElementById('res2');
-    if (pt1 && pt2) {
-        calcularEMedirPontos(pt1, pt2);
-        if (res) res.classList.remove('hidden');
-    } else {
-        alert("Selecione dois pontos válidos.");
-    }
-    function getPontoById(id) {
+function getPontoById(id) {
     return pontos.find(p => p.id === id);
 }
 
 function calc2Pontos() {
-    const id1 = document.getElementById('p1').value.trim();
-    const id2 = document.getElementById('p2').value.trim();
+    const id1 = document.getElementById('p1')?.value.trim();
+    const id2 = document.getElementById('p2')?.value.trim();
     const resDiv = document.getElementById('res2');
+    if (!resDiv) return;
 
     const p1 = getPontoById(id1);
     const p2 = getPontoById(id2);
@@ -891,9 +867,16 @@ function calc2Pontos() {
         return;
     }
 
-    const dE = p2.este - p1.este;
-    const dN = p2.norte - p1.norte;
-    const dZ = p2.cota - p1.cota;
+    let x1 = p1.e !== undefined ? p1.e : p1.este;
+    let y1 = p1.n !== undefined ? p1.n : p1.norte;
+    let z1 = p1.z !== undefined ? p1.z : p1.cota;
+    let x2 = p2.e !== undefined ? p2.e : p2.este;
+    let y2 = p2.n !== undefined ? p2.n : p2.norte;
+    let z2 = p2.z !== undefined ? p2.z : p2.cota;
+
+    const dE = x2 - x1;
+    const dN = y2 - y1;
+    const dZ = z2 - z1;
 
     const distH = Math.hypot(dE, dN);
     const dist3D = Math.hypot(dE, dN, dZ);
@@ -915,10 +898,11 @@ function calc2Pontos() {
 }
 
 function calc3Pontos() {
-    const idRe = document.getElementById('pRe').value.trim();
-    const idVertice = document.getElementById('pVertice').value.trim();
-    const idVante = document.getElementById('pVante').value.trim();
+    const idRe = document.getElementById('pRe')?.value.trim();
+    const idVertice = document.getElementById('pVertice')?.value.trim();
+    const idVante = document.getElementById('pVante')?.value.trim();
     const resDiv = document.getElementById('res3');
+    if (!resDiv) return;
 
     const pRe = getPontoById(idRe);
     const pVertice = getPontoById(idVertice);
@@ -929,8 +913,15 @@ function calc3Pontos() {
         return;
     }
 
-    const azRe = Math.atan2(pRe.este - pVertice.este, pRe.norte - pVertice.norte);
-    const azVante = Math.atan2(pVante.este - pVertice.este, pVante.norte - pVertice.norte);
+    let rx = pRe.e !== undefined ? pRe.e : pRe.este;
+    let ry = pRe.n !== undefined ? pRe.n : pRe.norte;
+    let vx = pVertice.e !== undefined ? pVertice.e : pVertice.este;
+    let vy = pVertice.n !== undefined ? pVertice.n : pVertice.norte;
+    let ax = pVante.e !== undefined ? pVante.e : pVante.este;
+    let ay = pVante.n !== undefined ? pVante.n : pVante.norte;
+
+    const azRe = Math.atan2(rx - vx, ry - vy);
+    const azVante = Math.atan2(ax - vx, ay - vy);
 
     let angHoriz = azVante - azRe;
     if (angHoriz < 0) angHoriz += 2 * Math.PI;
@@ -938,8 +929,8 @@ function calc3Pontos() {
 
     resDiv.innerHTML = `
         <strong>Ângulo Horizontal Interno:</strong> ${formatarGraus(angGraus)} (${angGraus.toFixed(4)}°)<br>
-        <strong>Distância Vértice-Ré:</strong> ${Math.hypot(pRe.este - pVertice.este, pRe.norte - pVertice.norte).toFixed(3)} m<br>
-        <strong>Distância Vértice-Vante:</strong> ${Math.hypot(pVante.este - pVertice.este, pVante.norte - pVertice.norte).toFixed(3)} m
+        <strong>Distância Vértice-Ré:</strong> ${Math.hypot(rx - vx, ry - vy).toFixed(3)} m<br>
+        <strong>Distância Vértice-Vante:</strong> ${Math.hypot(ax - vx, ay - vy).toFixed(3)} m
     `;
     resDiv.classList.remove('hidden');
 }
@@ -953,8 +944,9 @@ function formatarGraus(degDecimal) {
 }
 
 // ==========================================
-// 4. ÁREA, PERÍMETRO E VOLUME
+// ÁREA, PERÍMETRO E VOLUME
 // ==========================================
+let areaSequence = [];
 
 function adicionarPontoArea() {
     if (pontos.length === 0) {
@@ -996,20 +988,27 @@ function calcularArea() {
         const p1 = areaSequence[i];
         const p2 = areaSequence[(i + 1) % n];
 
-        area2D += (p1.este * p2.norte) - (p2.este * p1.norte);
-        perimetro += Math.hypot(p2.este - p1.este, p2.norte - p1.norte);
+        let x1 = p1.e !== undefined ? p1.e : p1.este;
+        let y1 = p1.n !== undefined ? p1.n : p1.norte;
+        let x2 = p2.e !== undefined ? p2.e : p2.este;
+        let y2 = p2.n !== undefined ? p2.n : p2.norte;
+
+        area2D += (x1 * y2) - (x2 * y1);
+        perimetro += Math.hypot(x2 - x1, y2 - y1);
     }
 
     area2D = Math.abs(area2D) / 2;
     const areaHectares = area2D / 10000;
 
     const resDiv = document.getElementById('resArea');
-    resDiv.innerHTML = `
-        <strong>Área Projetada:</strong> ${area2D.toFixed(3)} m² (${areaHectares.toFixed(4)} ha)<br>
-        <strong>Perímetro:</strong> ${perimetro.toFixed(3)} m<br>
-        <strong>Vértices Utilizados:</strong> ${n}
-    `;
-    resDiv.classList.remove('hidden');
+    if (resDiv) {
+        resDiv.innerHTML = `
+            <strong>Área Projetada:</strong> ${area2D.toFixed(3)} m² (${areaHectares.toFixed(4)} ha)<br>
+            <strong>Perímetro:</strong> ${perimetro.toFixed(3)} m<br>
+            <strong>Vértices Utilizados:</strong> ${n}
+        `;
+        resDiv.classList.remove('hidden');
+    }
 }
 
 function calcularVolumeUI() {
@@ -1025,8 +1024,15 @@ function calcularVolumeUI() {
     for (let i = 0; i < n; i++) {
         const p1 = areaSequence[i];
         const p2 = areaSequence[(i + 1) % n];
-        area2D += (p1.este * p2.norte) - (p2.este * p1.norte);
-        somaCota += p1.cota;
+
+        let x1 = p1.e !== undefined ? p1.e : p1.este;
+        let y1 = p1.n !== undefined ? p1.n : p1.norte;
+        let x2 = p2.e !== undefined ? p2.e : p2.este;
+        let y2 = p2.n !== undefined ? p2.n : p2.norte;
+        let z1 = p1.z !== undefined ? p1.z : p1.cota;
+
+        area2D += (x1 * y2) - (x2 * y1);
+        somaCota += z1;
     }
     area2D = Math.abs(area2D) / 2;
     const cotaMedia = somaCota / n;
@@ -1044,19 +1050,20 @@ function calcularVolumeUI() {
     const volume = area2D * alturaMedia;
 
     const resDiv = document.getElementById('resArea');
-    resDiv.innerHTML = `
-        <strong>Área Base:</strong> ${area2D.toFixed(3)} m²<br>
-        <strong>Cota Média do Terreno:</strong> ${cotaMedia.toFixed(3)} m<br>
-        <strong>Cota Referência:</strong> ${cotaRef.toFixed(3)} m<br>
-        <strong>Volume Estimado:</strong> ${Math.abs(volume).toFixed(3)} m³ (${volume >= 0 ? 'Corte/Aterro' : 'Escavação'})
-    `;
-    resDiv.classList.remove('hidden');
+    if (resDiv) {
+        resDiv.innerHTML = `
+            <strong>Área Base:</strong> ${area2D.toFixed(3)} m²<br>
+            <strong>Cota Média do Terreno:</strong> ${cotaMedia.toFixed(3)} m<br>
+            <strong>Cota Referência:</strong> ${cotaRef.toFixed(3)} m<br>
+            <strong>Volume Estimado:</strong> ${Math.abs(volume).toFixed(3)} m³ (${volume >= 0 ? 'Corte/Aterro' : 'Escavação'})
+        `;
+        resDiv.classList.remove('hidden');
+    }
 }
 
 // ==========================================
-// 5. POLIGONAL POR VISADAS (CAMINHAMENTO)
+// POLIGONAL POR VISADAS (CAMINHAMENTO)
 // ==========================================
-
 function adicionarLeituraCampo() {
     const estacao = document.getElementById('obsEstacao').value.trim().toUpperCase();
     const re = document.getElementById('obsRe').value.trim().toUpperCase();
@@ -1072,7 +1079,6 @@ function adicionarLeituraCampo() {
     leiturasCampo.push({ estacao, re, vante, angulo, distancia });
     atualizarTabelaLeituras();
 
-    // Auto-preenchimento inteligente para a próxima estaca
     document.getElementById('obsEstacao').value = vante;
     document.getElementById('obsRe').value = estacao;
     document.getElementById('obsVante').value = '';
@@ -1157,7 +1163,6 @@ function calcularPoligonalCompleta(observacoes, azimuteInicial = 0, coordInicial
     };
 }
 
-// Função matemática de conversão: GMS -> Decimal
 function gmsParaDecimal(graus = 0, minutos = 0, segundos = 0) {
     const signo = graus < 0 ? -1 : 1;
     const gAbs = Math.abs(graus);
@@ -1165,7 +1170,6 @@ function gmsParaDecimal(graus = 0, minutos = 0, segundos = 0) {
     return decimal * signo;
 }
 
-// Interface do usuário para o conversor GMS
 function converterGMSParaDecimalUI() {
     const g = parseFloat(document.getElementById('gmsGraus').value) || 0;
     const m = parseFloat(document.getElementById('gmsMinutos').value) || 0;
@@ -1178,12 +1182,13 @@ function converterGMSParaDecimalUI() {
 
     const resultadoDecimal = gmsParaDecimal(g, m, s);
     const resDiv = document.getElementById('resGMS');
-
-    resDiv.innerHTML = `
-        <strong>Valor em Graus Decimais:</strong> ${resultadoDecimal.toFixed(6)}°<br>
-        <small style="color:#64748b;">Pronto para uso nas ferramentas de azimute e ângulo.</small>
-    `;
-    resDiv.classList.remove('hidden');
+    if (resDiv) {
+        resDiv.innerHTML = `
+            <strong>Valor em Graus Decimais:</strong> ${resultadoDecimal.toFixed(6)}°<br>
+            <small style="color:#64748b;">Pronto para uso nas ferramentas de azimute e ângulo.</small>
+        `;
+        resDiv.classList.remove('hidden');
+    }
 }
 
 function processarPoligonalCampo() {
@@ -1198,23 +1203,26 @@ function processarPoligonalCampo() {
     resultado.pontos.forEach(ponto => {
         const idx = pontos.findIndex(p => p.id === ponto.id);
         if (idx === -1) {
-            pontos.push({ id: ponto.id, este: ponto.este, norte: ponto.norte, cota: 0, desc: 'Poligonal' });
+            pontos.push({ id: ponto.id, este: ponto.este, norte: ponto.norte, e: ponto.este, n: ponto.norte, z: 0, cota: 0, desc: 'Poligonal' });
         } else {
             pontos[idx].este = ponto.este;
+            pontos[idx].e = ponto.este;
             pontos[idx].norte = ponto.norte;
+            pontos[idx].n = ponto.norte;
         }
     });
 
     renderTable();
 
     const resDiv = document.getElementById('resPoligonalCampo');
-    resDiv.innerHTML = `
-        <strong>Perímetro Total:</strong> ${resultado.perimetro} m<br>
-        <strong>Erro Angular (Ea):</strong> ${resultado.erroAngular}°<br>
-        <strong>Erro Linear Total:</strong> ${resultado.erroLinear} m<br>
-        <strong>Precisão Relativa:</strong> ${resultado.precisao}<br>
-        <small style="color:#166534;">✓ Coordenadas compensadas via Bowditch e gravadas na caderneta.</small>
-    `;
-    resDiv.classList.remove('hidden');
-}
+    if (resDiv) {
+        resDiv.innerHTML = `
+            <strong>Perímetro Total:</strong> ${resultado.perimetro} m<br>
+            <strong>Erro Angular (Ea):</strong> ${resultado.erroAngular}°<br>
+            <strong>Erro Linear Total:</strong> ${resultado.erroLinear} m<br>
+            <strong>Precisão Relativa:</strong> ${resultado.precisao}<br>
+            <small style="color:#166534;">✓ Coordenadas compensadas via Bowditch e gravadas na caderneta.</small>
+        `;
+        resDiv.classList.remove('hidden');
+    }
 }
