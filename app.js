@@ -787,6 +787,8 @@ function limparLinhas() {
     desenharCroqui();
 }
 
+
+
 /* ==========================================================================
 CALCULADORAS TOPOGRÁFICAS
 ========================================================================== */
@@ -872,4 +874,347 @@ function calc2Pontos() {
     } else {
         alert("Selecione dois pontos válidos.");
     }
+    function getPontoById(id) {
+    return pontos.find(p => p.id === id);
+}
+
+function calc2Pontos() {
+    const id1 = document.getElementById('p1').value.trim();
+    const id2 = document.getElementById('p2').value.trim();
+    const resDiv = document.getElementById('res2');
+
+    const p1 = getPontoById(id1);
+    const p2 = getPontoById(id2);
+
+    if (!p1 || !p2) {
+        resDiv.classList.add('hidden');
+        return;
+    }
+
+    const dE = p2.este - p1.este;
+    const dN = p2.norte - p1.norte;
+    const dZ = p2.cota - p1.cota;
+
+    const distH = Math.hypot(dE, dN);
+    const dist3D = Math.hypot(dE, dN, dZ);
+
+    let azimuteRad = Math.atan2(dE, dN);
+    if (azimuteRad < 0) azimuteRad += 2 * Math.PI;
+    const azimuteGraus = (azimuteRad * 180) / Math.PI;
+
+    const declividade = distH > 0 ? (dZ / distH) * 100 : 0;
+
+    resDiv.innerHTML = `
+        <strong>Distância Horizontal:</strong> ${distH.toFixed(3)} m<br>
+        <strong>Distância 3D:</strong> ${dist3D.toFixed(3)} m<br>
+        <strong>Azimute:</strong> ${formatarGraus(azimuteGraus)} (${azimuteGraus.toFixed(4)}°)<br>
+        <strong>Desnível (ΔZ):</strong> ${dZ.toFixed(3)} m<br>
+        <strong>Declividade:</strong> ${declividade.toFixed(2)}%
+    `;
+    resDiv.classList.remove('hidden');
+}
+
+function calc3Pontos() {
+    const idRe = document.getElementById('pRe').value.trim();
+    const idVertice = document.getElementById('pVertice').value.trim();
+    const idVante = document.getElementById('pVante').value.trim();
+    const resDiv = document.getElementById('res3');
+
+    const pRe = getPontoById(idRe);
+    const pVertice = getPontoById(idVertice);
+    const pVante = getPontoById(idVante);
+
+    if (!pRe || !pVertice || !pVante) {
+        resDiv.classList.add('hidden');
+        return;
+    }
+
+    const azRe = Math.atan2(pRe.este - pVertice.este, pRe.norte - pVertice.norte);
+    const azVante = Math.atan2(pVante.este - pVertice.este, pVante.norte - pVertice.norte);
+
+    let angHoriz = azVante - azRe;
+    if (angHoriz < 0) angHoriz += 2 * Math.PI;
+    const angGraus = (angHoriz * 180) / Math.PI;
+
+    resDiv.innerHTML = `
+        <strong>Ângulo Horizontal Interno:</strong> ${formatarGraus(angGraus)} (${angGraus.toFixed(4)}°)<br>
+        <strong>Distância Vértice-Ré:</strong> ${Math.hypot(pRe.este - pVertice.este, pRe.norte - pVertice.norte).toFixed(3)} m<br>
+        <strong>Distância Vértice-Vante:</strong> ${Math.hypot(pVante.este - pVertice.este, pVante.norte - pVertice.norte).toFixed(3)} m
+    `;
+    resDiv.classList.remove('hidden');
+}
+
+function formatarGraus(degDecimal) {
+    const d = Math.floor(degDecimal);
+    const minFloat = (degDecimal - d) * 60;
+    const m = Math.floor(minFloat);
+    const s = Math.round((minFloat - m) * 60);
+    return `${d}° ${m}' ${s}"`;
+}
+
+// ==========================================
+// 4. ÁREA, PERÍMETRO E VOLUME
+// ==========================================
+
+function adicionarPontoArea() {
+    if (pontos.length === 0) {
+        alert('Nenhum ponto cadastrado.');
+        return;
+    }
+    const select = document.createElement('select');
+    select.className = 'area-ponto-select';
+    select.innerHTML = `<option value="">-- Selecione o Ponto --</option>` +
+        pontos.map(p => `<option value="${p.id}">${p.id}</option>`).join('');
+
+    select.onchange = () => renderAreaSelection();
+    document.getElementById('areaSelection').appendChild(select);
+}
+
+function renderAreaSelection() {
+    const selects = document.querySelectorAll('.area-ponto-select');
+    areaSequence = [];
+    selects.forEach(s => {
+        if (s.value) {
+            const p = getPontoById(s.value);
+            if (p) areaSequence.push(p);
+        }
+    });
+}
+
+function calcularArea() {
+    renderAreaSelection();
+    const n = areaSequence.length;
+    if (n < 3) {
+        alert('Selecione pelo menos 3 pontos na sequência para calcular a área.');
+        return;
+    }
+
+    let area2D = 0;
+    let perimetro = 0;
+
+    for (let i = 0; i < n; i++) {
+        const p1 = areaSequence[i];
+        const p2 = areaSequence[(i + 1) % n];
+
+        area2D += (p1.este * p2.norte) - (p2.este * p1.norte);
+        perimetro += Math.hypot(p2.este - p1.este, p2.norte - p1.norte);
+    }
+
+    area2D = Math.abs(area2D) / 2;
+    const areaHectares = area2D / 10000;
+
+    const resDiv = document.getElementById('resArea');
+    resDiv.innerHTML = `
+        <strong>Área Projetada:</strong> ${area2D.toFixed(3)} m² (${areaHectares.toFixed(4)} ha)<br>
+        <strong>Perímetro:</strong> ${perimetro.toFixed(3)} m<br>
+        <strong>Vértices Utilizados:</strong> ${n}
+    `;
+    resDiv.classList.remove('hidden');
+}
+
+function calcularVolumeUI() {
+    renderAreaSelection();
+    const n = areaSequence.length;
+    if (n < 3) {
+        alert('Selecione pelo menos 3 pontos para calcular o volume.');
+        return;
+    }
+
+    let area2D = 0;
+    let somaCota = 0;
+    for (let i = 0; i < n; i++) {
+        const p1 = areaSequence[i];
+        const p2 = areaSequence[(i + 1) % n];
+        area2D += (p1.este * p2.norte) - (p2.este * p1.norte);
+        somaCota += p1.cota;
+    }
+    area2D = Math.abs(area2D) / 2;
+    const cotaMedia = somaCota / n;
+
+    const cotaReferenciaStr = prompt('Informe a cota de referência/projeto (m):', cotaMedia.toFixed(3));
+    if (cotaReferenciaStr === null) return;
+    const cotaRef = parseFloat(cotaReferenciaStr);
+
+    if (isNaN(cotaRef)) {
+        alert('Cota inválida.');
+        return;
+    }
+
+    const alturaMedia = cotaMedia - cotaRef;
+    const volume = area2D * alturaMedia;
+
+    const resDiv = document.getElementById('resArea');
+    resDiv.innerHTML = `
+        <strong>Área Base:</strong> ${area2D.toFixed(3)} m²<br>
+        <strong>Cota Média do Terreno:</strong> ${cotaMedia.toFixed(3)} m<br>
+        <strong>Cota Referência:</strong> ${cotaRef.toFixed(3)} m<br>
+        <strong>Volume Estimado:</strong> ${Math.abs(volume).toFixed(3)} m³ (${volume >= 0 ? 'Corte/Aterro' : 'Escavação'})
+    `;
+    resDiv.classList.remove('hidden');
+}
+
+// ==========================================
+// 5. POLIGONAL POR VISADAS (CAMINHAMENTO)
+// ==========================================
+
+function adicionarLeituraCampo() {
+    const estacao = document.getElementById('obsEstacao').value.trim().toUpperCase();
+    const re = document.getElementById('obsRe').value.trim().toUpperCase();
+    const vante = document.getElementById('obsVante').value.trim().toUpperCase();
+    const angulo = parseFloat(document.getElementById('obsAngulo').value);
+    const distancia = parseFloat(document.getElementById('obsDistancia').value);
+
+    if (!estacao || !re || !vante || isNaN(angulo) || isNaN(distancia)) {
+        alert('Preencha todos os campos da leitura corretamente.');
+        return;
+    }
+
+    leiturasCampo.push({ estacao, re, vante, angulo, distancia });
+    atualizarTabelaLeituras();
+
+    // Auto-preenchimento inteligente para a próxima estaca
+    document.getElementById('obsEstacao').value = vante;
+    document.getElementById('obsRe').value = estacao;
+    document.getElementById('obsVante').value = '';
+    document.getElementById('obsAngulo').value = '';
+    document.getElementById('obsDistancia').value = '';
+    document.getElementById('obsVante').focus();
+}
+
+function atualizarTabelaLeituras() {
+    const tbody = document.getElementById('tabelaLeiturasBody');
+    if (!tbody) return;
+
+    if (leiturasCampo.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#64748b;">Nenhuma leitura inserida.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = leiturasCampo.map((obs) => `
+        <tr>
+            <td><strong>${obs.estacao}</strong></td>
+            <td>${obs.re}</td>
+            <td>${obs.vante}</td>
+            <td>${obs.angulo.toFixed(4)}°</td>
+            <td>${obs.distancia.toFixed(3)} m</td>
+        </tr>
+    `).join('');
+}
+
+function calcularPoligonalCompleta(observacoes, azimuteInicial = 0, coordInicial = { x: 1000, y: 1000 }) {
+    const n = observacoes.length;
+    if (n < 3) return null;
+
+    const somaAngulosLidos = observacoes.reduce((sum, obs) => sum + obs.angulo, 0);
+    const somaTeorica = (n - 2) * 180;
+    const erroAngular = somaAngulosLidos - somaTeorica;
+    const correcaoPorAngulo = -erroAngular / n;
+
+    let azimuteAtual = azimuteInicial;
+    let perimetroTotal = 0;
+
+    const trechos = observacoes.map((obs) => {
+        const anguloCorrigido = obs.angulo + correcaoPorAngulo;
+        
+        azimuteAtual = (azimuteAtual + anguloCorrigido + 180) % 360;
+        if (azimuteAtual < 0) azimuteAtual += 360;
+
+        const rad = (azimuteAtual * Math.PI) / 180;
+        const dX = obs.distancia * Math.sin(rad);
+        const dY = obs.distancia * Math.cos(rad);
+
+        perimetroTotal += obs.distancia;
+
+        return { estacao: obs.estacao, vante: obs.vante, distancia: obs.distancia, azimute: azimuteAtual, dX, dY };
+    });
+
+    const erroX = trechos.reduce((sum, t) => sum + t.dX, 0);
+    const erroY = trechos.reduce((sum, t) => sum + t.dY, 0);
+    const erroLinear = Math.hypot(erroX, erroY);
+    const precisaoRelativa = erroLinear > 0.0001 ? Math.round(perimetroTotal / erroLinear) : 0;
+
+    let xAtual = coordInicial.x;
+    let yAtual = coordInicial.y;
+
+    const pontosAjustados = [{ id: observacoes[0].estacao, este: xAtual, norte: yAtual }];
+
+    trechos.forEach((t) => {
+        const corrX = -erroX * (t.distancia / perimetroTotal);
+        const corrY = -erroY * (t.distancia / perimetroTotal);
+
+        xAtual += (t.dX + corrX);
+        yAtual += (t.dY + corrY);
+
+        pontosAjustados.push({ id: t.vante, este: Number(xAtual.toFixed(3)), norte: Number(yAtual.toFixed(3)) });
+    });
+
+    return {
+        erroAngular: erroAngular.toFixed(4),
+        perimetro: perimetroTotal.toFixed(3),
+        erroLinear: erroLinear.toFixed(4),
+        precisao: precisaoRelativa > 0 ? `1 : ${precisaoRelativa.toLocaleString('pt-BR')}` : '1 : ∞ (Exato)',
+        pontos: pontosAjustados
+    };
+}
+
+// Função matemática de conversão: GMS -> Decimal
+function gmsParaDecimal(graus = 0, minutos = 0, segundos = 0) {
+    const signo = graus < 0 ? -1 : 1;
+    const gAbs = Math.abs(graus);
+    const decimal = gAbs + (minutos / 60) + (segundos / 3600);
+    return decimal * signo;
+}
+
+// Interface do usuário para o conversor GMS
+function converterGMSParaDecimalUI() {
+    const g = parseFloat(document.getElementById('gmsGraus').value) || 0;
+    const m = parseFloat(document.getElementById('gmsMinutos').value) || 0;
+    const s = parseFloat(document.getElementById('gmsSegundos').value) || 0;
+
+    if (m >= 60 || s >= 60) {
+        alert('Minutos e Segundos devem ser menores que 60.');
+        return;
+    }
+
+    const resultadoDecimal = gmsParaDecimal(g, m, s);
+    const resDiv = document.getElementById('resGMS');
+
+    resDiv.innerHTML = `
+        <strong>Valor em Graus Decimais:</strong> ${resultadoDecimal.toFixed(6)}°<br>
+        <small style="color:#64748b;">Pronto para uso nas ferramentas de azimute e ângulo.</small>
+    `;
+    resDiv.classList.remove('hidden');
+}
+
+function processarPoligonalCampo() {
+    if (leiturasCampo.length < 3) {
+        alert('Adicione pelo menos 3 leituras para calcular a poligonal.');
+        return;
+    }
+
+    const resultado = calcularPoligonalCompleta(leiturasCampo);
+    if (!resultado) return;
+
+    resultado.pontos.forEach(ponto => {
+        const idx = pontos.findIndex(p => p.id === ponto.id);
+        if (idx === -1) {
+            pontos.push({ id: ponto.id, este: ponto.este, norte: ponto.norte, cota: 0, desc: 'Poligonal' });
+        } else {
+            pontos[idx].este = ponto.este;
+            pontos[idx].norte = ponto.norte;
+        }
+    });
+
+    renderTable();
+
+    const resDiv = document.getElementById('resPoligonalCampo');
+    resDiv.innerHTML = `
+        <strong>Perímetro Total:</strong> ${resultado.perimetro} m<br>
+        <strong>Erro Angular (Ea):</strong> ${resultado.erroAngular}°<br>
+        <strong>Erro Linear Total:</strong> ${resultado.erroLinear} m<br>
+        <strong>Precisão Relativa:</strong> ${resultado.precisao}<br>
+        <small style="color:#166534;">✓ Coordenadas compensadas via Bowditch e gravadas na caderneta.</small>
+    `;
+    resDiv.classList.remove('hidden');
+}
 }
