@@ -1,6 +1,7 @@
 /* ==========================================================================
 ARGES CADERNETA TOPOGRÁFICA - SISTEMA COMPLETO E MOTOR CANVAS INTERATIVO
 ========================================================================== */
+
 // --- VARIÁVEIS GLOBAIS DE DADOS ---
 let sessoes = JSON.parse(localStorage.getItem('arges_sessoes')) || { "Obra Principal": [] };
 let sessaoAtual = localStorage.getItem('arges_sessao_atual') || "Obra Principal";
@@ -24,12 +25,14 @@ let startDragX = 0;
 let startDragY = 0;
 let mousePosCanvas = { x: 0, y: 0 };
 
-// --- NOVAS VARIÁVEIS PARA CONTROLE DE TOQUE (MOBILE) ---
+// --- VARIÁVEIS PARA CONTROLE DE TOQUE (MOBILE) E PINCH ZOOM ---
 let touchStartX = 0;
 let touchStartY = 0;
 let touchStartTime = 0;
 let touchMoved = false;
 let touchOnPoint = false;
+let initialPinchDistance = 0; // Distância inicial entre os dois dedos
+let initialZoomScale = 1;     // Nível de zoom no momento em que o toque duplo começou
 
 // --- INICIALIZAÇÃO ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -58,6 +61,7 @@ function salvarSessoesStorage() {
     localStorage.setItem('arges_sessoes', JSON.stringify(sessoes));
     localStorage.setItem('arges_sessao_atual', sessaoAtual);
 }
+
 function atualizarSelectSessoes() {
     const select = document.getElementById('selectSessao');
     if (!select) return;
@@ -70,6 +74,7 @@ function atualizarSelectSessoes() {
         select.appendChild(opt);
     });
 }
+
 function trocarSessaoUI() {
     const select = document.getElementById('selectSessao');
     if (!select) return;
@@ -82,6 +87,7 @@ function trocarSessaoUI() {
     atualizarDatalists();
     redefinirVistaCanvas();
 }
+
 function criarNovaSessaoUI() {
     const nome = prompt("Nome da nova Obra / Sessão:");
     if (!nome) return;
@@ -96,6 +102,7 @@ function criarNovaSessaoUI() {
     atualizarDatalists();
     redefinirVistaCanvas();
 }
+
 function excluirSessaoAtualUI() {
     const chaves = Object.keys(sessoes);
     if (chaves.length <= 1) { alert("Você precisa ter pelo menos uma obra cadastrada."); return; }
@@ -113,7 +120,7 @@ function excluirSessaoAtualUI() {
 }
 
 /* ==========================================================================
-IMPORTAÇÃO E EXPORTAÇÃO (INTACTO - NÃO MEXIDO)
+IMPORTAÇÃO E EXPORTAÇÃO
 ========================================================================== */
 function configurarImportacaoArquivo() {
     const fileInput = document.getElementById('fileInput');
@@ -141,6 +148,7 @@ function configurarImportacaoArquivo() {
         reader.readAsText(file);
     });
 }
+
 function preencherOpcoesMapeamento(primeiraLinha) {
     const separador = primeiraLinha.includes(',') ? ',' : (primeiraLinha.includes(';') ? ';' : ' ');
     const colunas = primeiraLinha.split(separador).map((c, i) => `Coluna ${i + 1}: ${c.trim()}`);
@@ -159,6 +167,7 @@ function preencherOpcoesMapeamento(primeiraLinha) {
         if (colunas.length >= 5 && document.getElementById('mapDesc')) document.getElementById('mapDesc').value = "4";
     }
 }
+
 function processarArquivoCSV() {
     const idxId = parseInt(document.getElementById('mapId').value);
     const idxE = parseInt(document.getElementById('mapE').value);
@@ -184,6 +193,7 @@ function processarArquivoCSV() {
     salvarESincronizar();
     alert(`${carregados} pontos carregados com sucesso!`);
 }
+
 function processarTopconGTS(conteudoTexto) {
     let carregados = 0;
     const regexPonto = /(?:_?([^\_\|\n\r\t]+)[\_\|]+)?x\+?(-?\d+[\.,]?\d*)[\_\|]*\s*y\+?(-?\d+[\.,]?\d*)[\_\|]*\s*z\+?(-?\d+[\.,]?\d*)/gi;
@@ -230,12 +240,14 @@ function processarTopconGTS(conteudoTexto) {
     salvarESincronizar();
     alert(`✅ ${carregados} pontos carregados do arquivo Topcon GTS!`);
 }
+
 function salvarESincronizar() {
     salvarSessoesStorage();
     renderizarTabela();
     atualizarDatalists();
     desenharCroqui();
 }
+
 function exportarCaderneta() {
     if (pontos.length === 0) { alert('A caderneta está vazia.'); return; }
     const nomeEl = document.getElementById('nomeServico');
@@ -251,6 +263,7 @@ function exportarCaderneta() {
     });
     downloadArquivo(csv, `${nomeServico.toLowerCase().replace(/\s+/g, '_')}_${dataServico}.csv`, 'text/csv');
 }
+
 function exportarXYZ_GTS() {
     if (pontos.length === 0) { alert('A caderneta está vazia.'); return; }
     const nomeEl = document.getElementById('nomeServico');
@@ -270,6 +283,7 @@ function exportarXYZ_GTS() {
     });
     downloadArquivo(content, `${nomeServico.toLowerCase().replace(/\s+/g, '_')}_${dataServico}.xyz`, 'text/plain');
 }
+
 function downloadArquivo(conteudo, nomeArquivo, tipoMime) {
     const blob = new Blob([conteudo], { type: `${tipoMime};charset=utf-8;` });
     const link = document.createElement('a');
@@ -321,7 +335,9 @@ function renderizarTabela(filtro = '') {
     });
     desenharCroqui();
 }
+
 function renderTable() { renderizarTabela(); }
+
 function editarPontoDirect(index, campo, valor) {
     if (campo === 'desc') { pontos[index].desc = valor.trim(); }
     else {
@@ -337,13 +353,16 @@ function editarPontoDirect(index, campo, valor) {
     atualizarDatalists();
     desenharCroqui();
 }
+
 function filtrarTabela() {
     const input = document.getElementById('searchInput');
     const val = input ? input.value : '';
     renderizarTabela(val);
 }
+
 function abrirModalAdd() { const modal = document.getElementById('modalAdd'); if (modal) modal.classList.remove('hidden'); }
 function fecharModalAdd() { const modal = document.getElementById('modalAdd'); if (modal) modal.classList.add('hidden'); }
+
 function salvarNovoPonto() {
     const id = document.getElementById('newId').value.trim();
     const e = parseFloat(document.getElementById('newE').value);
@@ -362,6 +381,7 @@ function salvarNovoPonto() {
     document.getElementById('newZ').value = '';
     document.getElementById('newDesc').value = '';
 }
+
 function atualizarDatalists() {
     const datalist = document.getElementById('listaPontos');
     if (!datalist) return;
@@ -375,7 +395,7 @@ function atualizarDatalists() {
 }
 
 /* ==========================================================================
-MOTOR DO CROQUI CANVAS (CORRIGIDO PARA MOBILE)
+MOTOR DO CROQUI CANVAS
 ========================================================================== */
 function inicializarCanvas() {
     canvas = document.getElementById('croquiCanvas');
@@ -390,7 +410,7 @@ function inicializarCanvas() {
     canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
     canvas.addEventListener('click', onCanvasClick);
 
-    // TOQUE (MOBILE) - CORIGIDO
+    // TOQUE (MOBILE) - COM PINCH ZOOM
     canvas.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
     canvas.addEventListener('touchend', onCanvasTouchEnd, { passive: false });
@@ -398,11 +418,13 @@ function inicializarCanvas() {
 
     redefinirVistaCanvas();
 }
+
 function ajustarTamanhoCanvas() {
     if (!canvas || !canvas.parentElement) return;
     canvas.width = canvas.parentElement.clientWidth;
     canvas.height = canvas.parentElement.clientHeight;
 }
+
 function setModoCroqui(modo) {
     modoCroqui = modo;
     pontoSelecionadoInicio = null;
@@ -418,6 +440,7 @@ function setModoCroqui(modo) {
     }
     desenharCroqui();
 }
+
 function worldToScreen(eVal, nVal) {
     if (pontos.length === 0) return { x: canvas.width / 2, y: canvas.height / 2 };
     let eMin = Math.min(...pontos.map(p => p.e !== undefined ? p.e : p.este));
@@ -438,6 +461,7 @@ function worldToScreen(eVal, nVal) {
     let y = (canvas.height / 2) - (nVal - centerN) * finalScale + panOffsetY;
     return { x, y };
 }
+
 function obterPontoProximoMouse(screenX, screenY, raioMax = 22) {
     let proximo = null;
     let menorDistSq = raioMax * raioMax;
@@ -454,7 +478,6 @@ function obterPontoProximoMouse(screenX, screenY, raioMax = 22) {
     return proximo;
 }
 
-// --- FUNÇÃO UNIFICADA DE SELEÇÃO (usada por mouse E touch) ---
 function processarSelecaoPonto(ponto) {
     if (modoCroqui === 'linha') {
         if (!pontoSelecionadoInicio) {
@@ -462,7 +485,7 @@ function processarSelecaoPonto(ponto) {
         } else {
             if (pontoSelecionadoInicio.id !== ponto.id) {
                 linhasCroqui.push({ p1: pontoSelecionadoInicio.id, p2: ponto.id });
-                pontoSelecionadoInicio = ponto; // permite continuar a cadeia
+                pontoSelecionadoInicio = ponto;
             }
         }
         desenharCroqui();
@@ -515,7 +538,6 @@ function desenharCroqui() {
             ctx.stroke();
         }
     });
-    // Linha temporária seguindo o dedo/mouse
     if (pontoSelecionadoInicio && mousePosCanvas && (modoCroqui === 'linha' || modoCroqui === 'medir')) {
         let xStart = pontoSelecionadoInicio.e !== undefined ? pontoSelecionadoInicio.e : pontoSelecionadoInicio.este;
         let yStart = pontoSelecionadoInicio.n !== undefined ? pontoSelecionadoInicio.n : pontoSelecionadoInicio.norte;
@@ -611,7 +633,7 @@ function onCanvasClick(e) {
     }
 }
 
-// --- TOQUE (MOBILE) - REESCRITO ---
+// --- TOQUE (MOBILE) - COM SUPORTE A PINCH ZOOM ESTILO GOOGLE MAPS ---
 function onCanvasTouchStart(e) {
     if (e.touches.length === 1) {
         let touch = e.touches[0];
@@ -623,14 +645,11 @@ function onCanvasTouchStart(e) {
         touchStartY = y;
         touchStartTime = Date.now();
         touchMoved = false;
-
         mousePosCanvas = { x, y };
 
-        // Verifica se tocou em um ponto
         let pontoTocado = obterPontoProximoMouse(x, y);
         touchOnPoint = !!pontoTocado;
 
-        // Só inicia pan se NÃO tocou em um ponto
         if (!touchOnPoint) {
             isDragging = true;
             startDragX = touch.clientX - panOffsetX;
@@ -638,30 +657,34 @@ function onCanvasTouchStart(e) {
         } else {
             isDragging = false;
         }
-
         e.preventDefault();
-    } else {
-        // 2 ou mais dedos: cancela qualquer seleção e faz pan
+    } else if (e.touches.length === 2) {
+        // Início do gesto de pinça
         isDragging = false;
         touchOnPoint = false;
+        let t1 = e.touches[0];
+        let t2 = e.touches[1];
+        
+        // Calcula a distância inicial entre os dedos
+        initialPinchDistance = Math.sqrt((t2.clientX - t1.clientX) ** 2 + (t2.clientY - t1.clientY) ** 2);
+        initialZoomScale = zoomScale;
+        e.preventDefault();
     }
 }
+
 function onCanvasTouchMove(e) {
     if (e.touches.length === 1) {
         let touch = e.touches[0];
         let rect = canvas.getBoundingClientRect();
         let x = touch.clientX - rect.left;
         let y = touch.clientY - rect.top;
-
         mousePosCanvas = { x, y };
 
         let dx = x - touchStartX;
         let dy = y - touchStartY;
 
-        // Se moveu mais de 8px, considera como arrasto
         if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
             touchMoved = true;
-            // Se começou tocando em ponto mas arrastou, vira pan
             if (touchOnPoint && !isDragging) {
                 isDragging = true;
                 startDragX = touch.clientX - panOffsetX;
@@ -675,26 +698,66 @@ function onCanvasTouchMove(e) {
             panOffsetY = touch.clientY - startDragY;
             desenharCroqui();
         } else if (pontoSelecionadoInicio) {
-            // Atualiza a linha temporária seguindo o dedo
             desenharCroqui();
         }
-
         e.preventDefault();
-    }
-}
-function onCanvasTouchEnd(e) {
-    // Se foi um toque rápido SEM movimento = tratar como "clique"
-    if (!touchMoved && touchStartTime) {
-        let pontoTocado = obterPontoProximoMouse(touchStartX, touchStartY);
-        if (pontoTocado) {
-            processarSelecaoPonto(pontoTocado);
+        
+    } else if (e.touches.length === 2) {
+        e.preventDefault();
+        let t1 = e.touches[0];
+        let t2 = e.touches[1];
+        let currentDistance = Math.sqrt((t2.clientX - t1.clientX) ** 2 + (t2.clientY - t1.clientY) ** 2);
+        
+        if (initialPinchDistance > 0) {
+            let scale = currentDistance / initialPinchDistance;
+            let newZoomScale = initialZoomScale * scale;
+            
+            // Limites de zoom para evitar perda de performance ou inversão da tela
+            newZoomScale = Math.max(0.1, Math.min(newZoomScale, 50));
+            
+            let rect = canvas.getBoundingClientRect();
+            let centerX = ((t1.clientX + t2.clientX) / 2) - rect.left;
+            let centerY = ((t1.clientY + t2.clientY) / 2) - rect.top;
+            
+            let ratio = newZoomScale / zoomScale;
+            
+            // Ajusta o deslocamento (pan) para que o ponto central entre os dedos 
+            // permaneça exatamente no mesmo lugar na tela (efeito Google Maps).
+            panOffsetX = panOffsetX * ratio + (centerX - canvas.width / 2) * (1 - ratio);
+            panOffsetY = panOffsetY * ratio + (centerY - canvas.height / 2) * (1 - ratio);
+            
+            zoomScale = newZoomScale;
+            desenharCroqui();
         }
     }
+}
 
-    isDragging = false;
-    touchOnPoint = false;
-    touchStartTime = 0;
-    touchMoved = false;
+function onCanvasTouchEnd(e) {
+    if (e.touches.length === 0) {
+        // Todos os dedos foram levantados
+        if (!touchMoved && touchStartTime) {
+            let pontoTocado = obterPontoProximoMouse(touchStartX, touchStartY);
+            if (pontoTocado) {
+                processarSelecaoPonto(pontoTocado);
+            }
+        }
+        isDragging = false;
+        touchOnPoint = false;
+        touchStartTime = 0;
+        touchMoved = false;
+        initialPinchDistance = 0;
+        
+    } else if (e.touches.length === 1) {
+        // Transição suave de 2 para 1 dedo: reinicia o estado de pinça e prepara para arrastar
+        initialPinchDistance = 0;
+        let touch = e.touches[0];
+        let rect = canvas.getBoundingClientRect();
+        touchStartX = touch.clientX - rect.left;
+        touchStartY = touch.clientY - rect.top;
+        isDragging = true;
+        startDragX = touch.clientX - panOffsetX;
+        startDragY = touch.clientY - panOffsetY;
+    }
 }
 
 function redefinirVistaCanvas() {
@@ -707,12 +770,14 @@ function redefinirVistaCanvas() {
     if (resBox) resBox.classList.add('hidden');
     desenharCroqui();
 }
+
 function desfazerLinha() {
     if (linhasCroqui.length > 0) {
         linhasCroqui.pop();
         desenharCroqui();
     }
 }
+
 function limparLinhas() {
     linhasCroqui = [];
     pontoSelecionadoInicio = null;
@@ -732,6 +797,7 @@ function grauParaGMS(grausDec) {
     let s = ((minTot - m) * 60).toFixed(1);
     return `${d}° ${m}' ${s}"`;
 }
+
 function calcularEMedirPontos(p1, p2) {
     let x1 = p1.e !== undefined ? p1.e : p1.este;
     let y1 = p1.n !== undefined ? p1.n : p1.norte;
@@ -759,6 +825,7 @@ function calcularEMedirPontos(p1, p2) {
         `;
     }
 }
+
 function calcularLocacaoUI() {
     const est = document.getElementById('locEstacao')?.value;
     const re = document.getElementById('locRe')?.value;
@@ -792,6 +859,7 @@ function calcularLocacaoUI() {
         `;
     }
 }
+
 function calc2Pontos() {
     let id1 = document.getElementById('p1')?.value;
     let id2 = document.getElementById('p2')?.value;
