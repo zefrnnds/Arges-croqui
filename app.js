@@ -214,7 +214,6 @@ function processarTopconGTS(conteudoTexto) {
         };
         let esteVal = parseCoordTopcon(rawX);
         let norteVal = parseCoordTopcon(rawY);
-        // Z tratado sem divisão por 1000 por padrão (conforme solicitado para elevação)
         let cotaVal = rawZ ? parseFloat(rawZ.replace(',', '.')) : 0.0; 
         
         if (!isNaN(esteVal) && !isNaN(norteVal)) {
@@ -279,7 +278,6 @@ function exportarXYZ_GTS() {
         let zVal = p.z !== undefined ? p.z : p.cota;
         const x = Math.max(0, Math.round((xVal || 0) * 1000)).toString().padStart(9, '0');
         const y = Math.max(0, Math.round((yVal || 0) * 1000)).toString().padStart(9, '0');
-        // Z mantido sem multiplicar por 1000
         const z = Math.max(0, Math.round((zVal || 0))).toString().padStart(9, '0');
         const idPadded = p.id.slice(0, 10).padEnd(10, ' ');
         content += `+${idPadded} _111111111100  x+${x}  y+${y}  z+${z}\r\n`;
@@ -1226,3 +1224,31 @@ function processarPoligonalCampo() {
         resDiv.classList.remove('hidden');
     }
 }
+
+// ==========================================
+// EXPOSIÇÃO GLOBAL EXPLÍCITA (Evita ReferenceError no HTML)
+// ==========================================
+window.trocarSessaoUI = trocarSessaoUI;
+window.criarNovaSessaoUI = criarNovaSessaoUI;
+window.excluirSessaoAtualUI = excluirSessaoAtualUI;
+window.filtrarTabela = filtrarTabela;
+window.abrirModalAdd = abrirModalAdd;
+window.exportarCaderneta = exportarCaderneta;
+window.exportarXYZ_GTS = exportarXYZ_GTS;
+window.editarPontoDirect = editarPontoDirect;
+window.processarArquivoCSV = processarArquivoCSV;
+window.setModoCroqui = setModoCroqui;
+window.desfazerLinha = desfazerLinha;
+window.limparLinhas = limparLinhas;
+window.redefinirVistaCanvas = redefinirVistaCanvas;
+window.calc2Pontos = calc2Pontos;
+window.calc3Pontos = calc3Pontos;
+window.adicionarPontoArea = adicionarPontoArea;
+window.calcularArea = calcularArea;
+window.calcularVolumeUI = calcularVolumeUI;
+window.adicionarLeituraCampo = adicionarLeituraCampo;
+window.processarPoligonalCampo = processarPoligonalCampo;
+window.converterGMSParaDecimalUI = converterGMSParaDecimalUI;
+window.calcularLocacaoUI = calcularLocacaoUI;
+window.fecharModalAdd = fecharModalAdd;
+window.salvarNovoPonto = salvarNovoPonto;
