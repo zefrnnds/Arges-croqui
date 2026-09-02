@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ARGES Caderneta Topográfica</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Parser DXF -->
+    <script src="https://cdn.jsdelivr.net/npm/dxf-parser@1.1.2/dist/dxf-parser.min.js"></script>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <nav id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h2>📐 ARGES Topo</h2>
+        </div>
+        <ul class="sidebar-menu">
+            <li><button class="menu-btn active" data-window="caderneta"><span class="icon">🗺️</span> Caderneta & Croqui</button></li>
+            <li><button class="menu-btn" data-window="calculos"><span class="icon">🧮</span> Cálculos</button></li>
+            <li><button class="menu-btn" data-window="conversoes"><span class="icon">🔄</span> Conversões</button></li>
+            <li><button class="menu-btn" data-window="importar-cad"><span class="icon">📐</span> Importar CAD (DXF/DWG)</button></li>
+            <li><button class="menu-btn" data-window="configuracoes"><span class="icon">⚙️</span> Configurações</button></li>
+        </ul>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main id="main-content">
+
+        <!-- JANELA 1: CADERNETA E CROQUI -->
+        <section id="window-caderneta" class="window active">
+            <div class="window-header">
+                <h1>Caderneta e Croqui</h1>
+                <div class="header-controls">
+                    <select id="selectSessao" onchange="trocarSessaoUI()"></select>
+                    <button class="btn btn-sm btn-outline" onclick="criarNovaSessaoUI()">+ Nova Obra</button>
+                    <button class="btn btn-sm btn-danger" onclick="excluirSessaoAtualUI()">Excluir</button>
+                </div>
+            </div>
+
+            <div class="caderneta-layout">
+                <div class="canvas-container">
+                    <div class="canvas-toolbar">
+                        <button id="btnModoPan" class="btn-tool active" onclick="setModoCroqui('pan')" title="Navegar">✋</button>
+                        <button id="btnModoLinha" class="btn-tool" onclick="setModoCroqui('linha')" title="Desenhar Linha">✏️</button>
+                        <button id="btnModoMedir" class="btn-tool" onclick="setModoCroqui('medir')" title="Medir Distância">📏</button>
+                        <button id="btnModoArea" class="btn-tool" onclick="ativarMedirArea()" title="Medir Área">📐</button>
+                        <div class="separator"></div>
+                        <button class="btn-tool" onclick="desfazerLinha()" title="Desfazer">↩️</button>
+                        <button class="btn-tool" onclick="limparLinhas()" title="Limpar Tudo">🗑️</button>
+                        <button class="btn-tool" onclick="redefinirVistaCanvas()" title="Centralizar">🎯</button>
+                    </div>
+
+                    <!-- Filtros e Opções de Visualização -->
+                    <div class="canvas-controls">
+                        <div class="control-group">
+                            <label>Filtrar por Descrição:</label>
+                            <input type="text" id="filtroCamadas" placeholder="Digite para filtrar..." oninput="aplicarFiltroCamadas()">
+                            <button class="btn btn-sm btn-outline" onclick="limparFiltroCamadas()">Limpar</button>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label>Exibir:</label>
+                            <select id="opcaoExibicao" onchange="atualizarExibicaoPontos()">
+                                <option value="id">ID dos Pontos</option>
+                                <option value="descricao">Descrição</option>
+                                <option value="ambos">ID + Descrição</option>
+                                <option value="nenhum">Apenas Pontos</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <span id="modoBadge" class="canvas-badge">Modo: Navegar</span>
+                    <canvas id="croquiCanvas"></canvas>
+                    <div id="resMedicaoCanvas" class="measurement-box hidden"></div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>Pontos <span id="pontosCount" class="badge">0</span></h3>
+                        <div class="table-actions">
+                            <input type="text" id="searchInput" placeholder="Buscar..." oninput="filtrarTabela()">
+                            <button class="btn btn-primary" onclick="abrirModalAdd()">+ Add Manual</button>
+                        </div>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead>
+                                <tr><th>ID</th><th>Este (X)</th><th>Norte (Y)</th><th>Cota (Z)</th><th>Descrição</th></tr>
+                            </thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="import-export-section">
+                        <h4>Importar / Exportar</h4>
+                        <input type="file" id="fileInput" accept=".txt,.csv,.xyz" style="display:none">
+                        <button class="btn btn-outline" onclick="document.getElementById('fileInput').click()">📂 Importar Arquivo</button>
+                        <button class="btn btn-outline" onclick="exportarCaderneta()">💾 Exportar CSV</button>
+                        <button class="btn btn-outline" onclick="exportarXYZ_GTS()">📡 Exportar GTS/XYZ</button>
+                    </div>
+
+                    <div id="mappingSection" class="hidden mapping-box">
+                        <h4>Mapear Colunas do Arquivo</h4>
+                        <p id="previewText" class="text-sm text-muted"></p>
+                        <pre id="previewData" class="preview-data"></pre>
+                        <div class="mapping-grid">
+                            <label>ID: <select id="mapId"></select></label>
+                            <label>Este (X): <select id="mapE"></select></label>
+                            <label>Norte (Y): <select id="mapN"></select></label>
+                            <label>Cota (Z): <select id="mapZ"></select></label>
+                            <label>Desc: <select id="mapDesc"></select></label>
+                        </div>
+                        <button class="btn btn-primary btn-full" onclick="processarArquivoCSV()">Confirmar Importação</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- JANELA 2: CÁLCULOS TOPOGRÁFICOS -->
+        <section id="window-calculos" class="window">
+            <div class="window-header"><h1>Cálculos Topográficos</h1></div>
+            <div class="calculations-grid">
+                
+                <!-- CARD 1: DISTÂNCIA E AZIMUTE (2 PONTOS) -->
+                <div class="calc-card">
+                    <h3>📏 Distância e Azimute (2 Pontos)</h3>
+                    <div class="form-group">
+                        <label>Ponto 1 (Estação)</label>
+                        <input type="text" id="p1" list="listaPontos" placeholder="ID do ponto">
+                    </div>
+                    <div class="form-group">
+                        <label>Ponto 2 (Alvo)</label>
+                        <input type="text" id="p2" list="listaPontos" placeholder="ID do ponto">
+                    </div>
+                    <button class="btn btn-primary btn-full" onclick="calc2Pontos()">Calcular</button>
+                    <div id="res2" class="result-box hidden"></div>
+                </div>
+
+                <!-- CARD 2: ÁREA E VOLUME -->
+                <div class="calc-card">
+                    <h3>📐 Área e Volume</h3>
+                    <p class="text-sm text-muted">Selecione os pontos na ordem do polígono.</p>
+                    <div id="areaSelection" class="area-sequence"></div>
+                    <div class="calc-actions">
+                        <button class="btn btn-outline" onclick="adicionarPontoArea()">+ Adicionar Ponto</button>
+                        <button class="btn btn-primary" onclick="calcularArea()">Calcular Área</button>
+                        <button class="btn btn-warning" onclick="calcularVolumeUI()">Calcular Volume</button>
+                    </div>
+                    <div id="resArea" class="result-box hidden"></div>
+                </div>
+
+                <!-- CARD 3: LOCAÇÃO POR COORDENADAS POLARES -->
+                <div class="calc-card">
+                    <h3>🎯 Locação por Coordenadas Polares</h3>
+                    <p class="text-sm text-muted" style="margin-bottom: 12px;">
+                        Calcule o ângulo e distância para locar um ponto em campo.
+                    </p>
+                    <div class="form-group">
+                        <label>📍 Estação (E)</label>
+                        <input type="text" id="locEstacao" list="listaPontos" placeholder="ID da estação">
+                    </div>
+                    <div class="form-group">
+                        <label>🔙 Ré (R)</label>
+                        <input type="text" id="locRe" list="listaPontos" placeholder="ID do ponto de ré">
+                    </div>
+                    <div class="form-group">
+                        <label>🎯 Ponto a Locar (A)</label>
+                        <input type="text" id="locAlvo" list="listaPontos" placeholder="ID do ponto alvo">
+                    </div>
+                    <button class="btn btn-primary btn-full" onclick="calcularLocacaoPolar()">Calcular Dados de Locação</button>
+                    <div id="resLocacaoPolar" class="result-box hidden"></div>
+                </div>
+
+                <!-- CARD 4: ESPAÇO RESERVADO (FUTURO) -->
+                <div class="calc-card" style="opacity: 0.5;">
+                    <h3>🚀 Em Breve</h3>
+                    <p class="text-sm text-muted">Novas ferramentas de cálculo serão adicionadas aqui.</p>
+                    <div style="height: 200px; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--border); border-radius: 8px; margin-top: 12px;">
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;">Espaço reservado</span>
+                    </div>
+                </div>
+
+                <!-- CARD 5: POLIGONAL POR VISADAS (LARGURA TOTAL) -->
+                <div class="calc-card full-width">
+                    <h3>🧭 Poligonal por Visadas (Caminhamento)</h3>
+                    <div class="poly-inputs">
+                        <input type="text" id="obsEstacao" list="listaPontos" placeholder="Estação">
+                        <input type="text" id="obsRe" list="listaPontos" placeholder="Ré">
+                        <input type="text" id="obsVante" list="listaPontos" placeholder="Vante">
+                        <input type="number" id="obsAngulo" step="0.0001" placeholder="Ângulo Hz (°)">
+                        <input type="number" id="obsDistancia" step="0.001" placeholder="Distância (m)">
+                        <button class="btn btn-primary" onclick="adicionarLeituraCampo()">Add Leitura</button>
+                    </div>
+                    <div class="table-scroll" style="max-height: 200px; margin-top: 10px;">
+                        <table>
+                            <thead><tr><th>Est</th><th>Ré</th><th>Vante</th><th>Ângulo</th><th>Dist</th></tr></thead>
+                            <tbody id="tabelaLeiturasBody"></tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-success btn-full" style="margin-top:10px" onclick="processarPoligonalCampo()">Compensar e Calcular Poligonal</button>
+                    <div id="resPoligonalCampo" class="result-box hidden"></div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- JANELA 3: CONVERSÕES -->
+   <section id="window-conversoes" class="window">
+    <div class="window-header">
+        <h1>🔄 Conversões</h1>
+        <p>Calculadora de ângulos, coordenadas e azimutes</p>
+    </div>
+    <div class="conversoes-layout">
+        <div class="conv-card">
+            <h3>📐 Ângulos (GMS ↔ Decimal)</h3>
+            <div class="conv-grid-2">
+                <div>
+                    <label class="conv-label">GMS → Decimal</label>
+                    <div class="conv-row-3">
+                        <input type="number" id="gmsG" placeholder="°" step="1">
+                        <input type="number" id="gmsM" placeholder="'" step="1">
+                        <input type="number" id="gmsS" placeholder='"' step="0.01">
+                    </div>
+                    <button class="btn btn-primary btn-full" onclick="converterGMSparaDecimal()">Converter →</button>
+                    <div id="resGMSparaDecimal" class="result-box hidden"></div>
+                </div>
+               
+            </div>
+        </div>
+
+        <div class="conv-card">
+            <h3>🧭 Coordenadas (Polar ↔ Retangular)</h3>
+            <div class="conv-grid-2">
+                <div>
+                    <label class="conv-label">Polar → Retangular</label>
+                    <div class="form-group"><label>Distância (r)</label><input type="number" id="polarR" step="0.001" placeholder="100.500"></div>
+                    <div class="form-group"><label>Azimute (°)</label><input type="number" id="polarAz" step="0.0001" placeholder="45.5000"></div>
+                    <button class="btn btn-primary btn-full" onclick="converterPolarparaRetangular()">Converter →</button>
+                    <div id="resPolarparaRet" class="result-box hidden"></div>
+                </div>
+                <div>
+                    <label class="conv-label">Retangular → Polar</label>
+                    <div class="form-group"><label>ΔX (Este)</label><input type="number" id="retX" step="0.001" placeholder="70.710"></div>
+                    <div class="form-group"><label>ΔY (Norte)</label><input type="number" id="retY" step="0.001" placeholder="70.710"></div>
+                    <button class="btn btn-primary btn-full" onclick="converterRetangularparaPolar()">Converter →</button>
+                    <div id="resRetparaPolar" class="result-box hidden"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="conv-card">
+            <h3>🔢 Cálculo Decimal</h3>
+            <div class="form-group">
+                <label>Valor Decimal</label>
+                <input type="number" id="valorDecimalInput" placeholder="Ex: 10.5" step="any" class="conv-input-full">
+            </div>
+            <button class="btn btn-primary btn-full" onclick="calcularDecimal()">Calcular →</button>
+            <div id="resCalculoDecimal" class="result-box hidden"></div>
+        </div>
+
+        <div class="conv-card full-width">
+            <h3>📏 Azimute e Distância entre Dois Pontos</h3>
+            <div class="conv-grid-2">
+                <div>
+                    <label class="conv-label">Ponto 1 (Estação)</label>
+                    <div class="form-group"><label>Este (X1)</label><input type="number" id="p1X" step="0.001" placeholder="500000.000"></div>
+                    <div class="form-group"><label>Norte (Y1)</label><input type="number" id="p1Y" step="0.001" placeholder="7500000.000"></div>
+                    <div class="form-group"><label>Cota (Z1) <small>(opcional)</small></label><input type="number" id="p1Z" step="0.001" placeholder="100.000"></div>
+                </div>
+                <div>
+                    <label class="conv-label">Ponto 2 (Alvo)</label>
+                    <div class="form-group"><label>Este (X2)</label><input type="number" id="p2X" step="0.001" placeholder="500100.000"></div>
+                    <div class="form-group"><label>Norte (Y2)</label><input type="number" id="p2Y" step="0.001" placeholder="7500100.000"></div>
+                    <div class="form-group"><label>Cota (Z2) <small>(opcional)</small></label><input type="number" id="p2Z" step="0.001" placeholder="105.000"></div>
+                </div>
+            </div>
+            <button class="btn btn-primary btn-full" style="margin-top: 12px;" onclick="calcularAzimuteDistancia()">Calcular Azimute e Distância</button>
+            <div id="resAzimuteDist" class="result-box hidden"></div>
+        </div>
+    </div>
+</section>
+
+        <!-- JANELA 4: IMPORTAR CAD (DXF/DWG) -->
+        <section id="window-importar-cad" class="window">
+            <div class="window-header">
+                <h1>📐 Importar Arquivos CAD</h1>
+                <p>Extraia pontos de arquivos DXF ou DWG para sua caderneta.</p>
+            </div>
+
+            <div class="cad-import-layout">
+                <!-- Área de Upload -->
+                <div class="cad-card">
+                    <h3>1. Selecionar Arquivo</h3>
+                    <div class="drop-zone" id="dropZone">
+                        <input type="file" id="cadFileInput" accept=".dxf,.dwg" style="display: none;">
+                        <div class="drop-zone-content">
+                            <span class="drop-icon">📂</span>
+                            <p>Arraste um arquivo <strong>.DXF</strong> ou <strong>.DWG</strong> aqui</p>
+                            <p class="text-sm text-muted">ou clique para selecionar</p>
+                        </div>
+                    </div>
+                    <div id="fileInfo" class="hidden" style="margin-top: 12px; padding: 12px; background: var(--bg-primary); border-radius: 6px;">
+                        <strong>Arquivo:</strong> <span id="fileName"></span><br>
+                        <strong>Tamanho:</strong> <span id="fileSize"></span>
+                    </div>
+                    <button class="btn btn-primary btn-full" style="margin-top: 16px;" onclick="processarArquivoCAD()">🔍 Analisar Arquivo</button>
+                </div>
+
+                <!-- Área de Pré-visualização e Importação -->
+                <div class="cad-card">
+                    <h3>2. Pré-visualização dos Pontos</h3>
+                    <div id="cadPreviewArea" class="preview-box">
+                        <p class="text-muted text-center" style="padding: 40px 0;">Nenhum arquivo analisado ainda.</p>
+                    </div>
+                    <div id="cadActions" class="hidden" style="margin-top: 16px; display: flex; gap: 12px;">
+                        <button class="btn btn-success btn-full" onclick="confirmarImportacaoCAD()">✅ Importar para a Caderneta</button>
+                        <button class="btn btn-outline" onclick="limparPreviewCAD()">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Aviso sobre DWG -->
+            <div class="settings-group" style="margin-top: 24px;">
+                <h3>⚠️ Nota sobre arquivos DWG</h3>
+                <p class="text-sm text-muted">
+                    O formato <strong>.DWG</strong> é binário e proprietário da Autodesk, impossível de ser lido diretamente pelo navegador por questões de segurança e direitos autorais. 
+                    <br><br>
+                    <strong>Solução recomendada:</strong> Abra o arquivo no AutoCAD, QCAD, LibreCAD ou no <a href="https://www.opendesign.com/guestfiles/oda-file-converter" target="_blank" style="color: var(--accent);">ODA File Converter (gratuito)</a> e salve/exporte como <strong>.DXF</strong>. Em seguida, importe o arquivo DXF nesta aba.
+                </p>
+            </div>
+        </section>
+
+        <!-- JANELA 5: CONFIGURAÇÕES -->
+        <section id="window-configuracoes" class="window">
+            <div class="window-header"><h1>Configurações e Ferramentas</h1></div>
+            <div class="settings-container">
+                <div class="settings-group">
+                    <h3>Aparência</h3>
+                    <div class="setting-item">
+                        <div><strong>Modo Escuro</strong><p>Alterne entre o tema claro e escuro</p></div>
+                        <label class="toggle"><input type="checkbox" id="toggle-dark"><span class="toggle-slider"></span></label>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>🔧 Ferramentas de Conversão em Lote</h3>
+                    <p class="text-sm text-muted" style="margin-bottom: 16px;">Use estas ferramentas para corrigir unidades de coordenadas importadas (ex: mm → m, cm → m).</p>
+                    <div class="conversion-panel">
+                        <div class="form-group">
+                            <label for="conversionFactor">Fator de Conversão</label>
+                            <input type="number" id="conversionFactor" step="any" value="1000" placeholder="Ex: 1000">
+                            <small style="color: var(--text-secondary); display: block; margin-top: 4px;">Exemplos: <strong>1000</strong> (mm→m) | <strong>100</strong> (cm→m) | <strong>0.001</strong> (m→km)</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Aplicar em:</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 6px;">
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" id="applyToX" checked> Eixo X (Este)</label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" id="applyToY" checked> Eixo Y (Norte)</label>
+                                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;"><input type="checkbox" id="applyToZ" checked> Eixo Z (Cota)</label>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+                            <button class="btn btn-primary" onclick="converterCoordenadas('dividir')">➗ Dividir por [fator]</button>
+                            <button class="btn btn-warning" onclick="converterCoordenadas('multiplicar')">✖️ Multiplicar por [fator]</button>
+                        </div>
+                        <div id="conversionResult" class="result-box hidden" style="margin-top: 16px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- DATALIST GLOBAL PARA AUTOCOMPLETE -->
+    <datalist id="listaPontos"></datalist>
+
+    <!-- MODAL ADICIONAR PONTO -->
+    <div id="modalAdd" class="modal hidden">
+        <div class="modal-content">
+            <h2>Adicionar Ponto Manualmente</h2>
+            <div class="form-group"><label>ID / Nome</label><input type="text" id="newId"></div>
+            <div class="form-group"><label>Este (X)</label><input type="number" step="0.001" id="newE"></div>
+            <div class="form-group"><label>Norte (Y)</label><input type="number" step="0.001" id="newN"></div>
+            <div class="form-group"><label>Cota (Z)</label><input type="number" step="0.001" id="newZ" value="0"></div>
+            <div class="form-group"><label>Descrição</label><input type="text" id="newDesc"></div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" onclick="fecharModalAdd()">Cancelar</button>
+                <button class="btn btn-primary" onclick="salvarNovoPonto()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS MODULARES -->
+    <script src="js/core.js"></script>
+    <script src="js/sessions.js"></script>
+    <script src="js/table.js"></script>
+    <script src="js/calculations.js"></script>
+    <script src="js/conversoes.js"></script>
+    <script src="js/dxf-handler.js"></script>
+    <script>
+        // Lógica de navegação entre as janelas do menu lateral
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuButtons = document.querySelectorAll('.menu-btn');
+            const windows = document.querySelectorAll('.window');
+
+            menuButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const targetWindowId = 'window-' + button.getAttribute('data-window');
+
+                    menuButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    windows.forEach(win => {
+                        win.classList.remove('active');
+                        if (win.id === targetWindowId) {
+                            win.classList.add('active');
+                        }
+                    });
+                });
+            });
+
+            // Toggle Dark Mode
+            const toggleDark = document.getElementById('toggle-dark');
+            if (toggleDark) {
+                toggleDark.addEventListener('change', () => {
+                    document.body.classList.toggle('dark', toggleDark.checked);
+                    if (typeof desenharCroqui === 'function') {
+                        desenharCroqui();
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
