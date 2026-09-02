@@ -172,13 +172,13 @@ document.addEventListener('DOMContentLoaded', () => {
     canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
     canvas.addEventListener('click', onCanvasClick);
 
-    // Eventos Touch (Mobile)
+    // Eventos Touch (Mobile Otimizados com { passive: false })
     canvas.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
     canvas.addEventListener('touchmove', onCanvasTouchMove, { passive: false });
     canvas.addEventListener('touchend', onCanvasTouchEnd, { passive: false });
     canvas.addEventListener('touchcancel', onCanvasTouchEnd, { passive: false });
 
-    console.log('✓ Canvas inicializado com sucesso');
+    console.log('✓ Canvas inicializado com sucesso e suporte Touch ativo');
     desenharCroqui();
 });
 
@@ -250,7 +250,7 @@ function worldToScreen(eVal, nVal) {
     };
 }
 
-function obterPontoProximoMouse(screenX, screenY, raioMax = 25) {
+function obterPontoProximoMouse(screenX, screenY, raioMax = 35) { // Raio estendido para facilitar toque em mobile
     let proximo = null;
     let menorDistSq = raioMax * raioMax;
     
@@ -269,6 +269,26 @@ function obterPontoProximoMouse(screenX, screenY, raioMax = 25) {
     });
     
     return proximo;
+}
+
+// --- FUNÇÃO AUXILIAR PARA DESENHAR SETA NA PONTA DA LINHA ---
+function desenharSeta(x1, y1, x2, y2, cor = '#3b82f6') {
+    const headLength = 12;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    
+    // Desenha as pontas da seta
+    ctx.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 6), y2 - headLength * Math.sin(angle - Math.PI / 6));
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 6), y2 - headLength * Math.sin(angle + Math.PI / 6));
+    
+    ctx.strokeStyle = cor;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.closePath();
 }
 
 // --- DESENHO ---
@@ -303,7 +323,7 @@ function desenharCroqui() {
         return;
     }
 
-    // Desenhar Linhas do Croqui
+    // Desenhar Linhas do Croqui com setas indicativas de direção
     if (window.linhasCroqui) {
         window.linhasCroqui.forEach(line => {
             let p1 = window.pontos.find(p => p.id === line.p1);
@@ -311,17 +331,12 @@ function desenharCroqui() {
             if (p1 && p2) {
                 let pos1 = worldToScreen(p1.e !== undefined ? p1.e : p1.este, p1.n !== undefined ? p1.n : p1.norte);
                 let pos2 = worldToScreen(p2.e !== undefined ? p2.e : p2.este, p2.n !== undefined ? p2.n : p2.norte);
-                ctx.beginPath();
-                ctx.moveTo(pos1.x, pos1.y);
-                ctx.lineTo(pos2.x, pos2.y);
-                ctx.strokeStyle = '#3b82f6';
-                ctx.lineWidth = 2;
-                ctx.stroke();
+                desenharSeta(pos1.x, pos1.y, pos2.x, pos2.y, '#3b82f6');
             }
         });
     }
 
-    // Linha de medição em andamento
+    // Linha de medição/desenho em tempo real (seguindo o mouse ou dedo)
     if (window.pontoSelecionadoInicio && mousePosCanvas && (window.modoCroqui === 'linha' || window.modoCroqui === 'medir')) {
         let pos1 = worldToScreen(
             window.pontoSelecionadoInicio.e !== undefined ? window.pontoSelecionadoInicio.e : window.pontoSelecionadoInicio.este,
@@ -331,7 +346,7 @@ function desenharCroqui() {
         ctx.moveTo(pos1.x, pos1.y);
         ctx.lineTo(mousePosCanvas.x, mousePosCanvas.y);
         ctx.strokeStyle = window.modoCroqui === 'medir' ? '#f59e0b' : '#10b981';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
         ctx.stroke();
         ctx.setLineDash([]);
@@ -347,12 +362,7 @@ function desenharCroqui() {
             window.medicaoAtual.p2.e !== undefined ? window.medicaoAtual.p2.e : window.medicaoAtual.p2.este,
             window.medicaoAtual.p2.n !== undefined ? window.medicaoAtual.p2.n : window.medicaoAtual.p2.norte
         );
-        ctx.beginPath();
-        ctx.moveTo(pos1.x, pos1.y);
-        ctx.lineTo(pos2.x, pos2.y);
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
+        desenharSeta(pos1.x, pos1.y, pos2.x, pos2.y, '#f59e0b');
         ctx.fillStyle = '#f59e0b';
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
@@ -371,11 +381,11 @@ function desenharCroqui() {
         const isSelected = window.pontoSelecionadoInicio && window.pontoSelecionadoInicio.id === p.id;
         
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, isSelected ? 8 : (estaNaArea ? 7 : 4), 0, 2 * Math.PI);
+        ctx.arc(pos.x, pos.y, isSelected ? 9 : (estaNaArea ? 8 : 5), 0, 2 * Math.PI);
         ctx.fillStyle = estaNaArea ? '#10b981' : (isSelected ? '#f59e0b' : '#3b82f6');
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 2;
         ctx.stroke();
         
         const texto = obterTextoExibicao(p);
@@ -383,7 +393,7 @@ function desenharCroqui() {
             ctx.fillStyle = document.body.classList.contains('dark') ? '#f1f5f9' : '#0f172a';
             ctx.font = opcaoExibicaoAtual === 'ambos' ? '10px sans-serif' : '11px sans-serif';
             ctx.textAlign = 'left';
-            ctx.fillText(texto, pos.x + 10, pos.y + 4);
+            ctx.fillText(texto, pos.x + 12, pos.y + 4);
         }
     });
 
@@ -421,7 +431,7 @@ function desenharCroqui() {
             let pos = worldToScreen(xVal, yVal);
             
             ctx.beginPath();
-            ctx.arc(pos.x, pos.y, 6, 0, 2 * Math.PI);
+            ctx.arc(pos.x, pos.y, 7, 0, 2 * Math.PI);
             ctx.fillStyle = idx === 0 ? '#10b981' : '#f59e0b';
             ctx.fill();
             ctx.strokeStyle = '#fff';
@@ -590,8 +600,9 @@ function onCanvasClick(e) {
     }
 }
 
-// --- EVENTOS TOUCH (MOBILE) ---
+// --- EVENTOS TOUCH (MOBILE MELHORADOS E ROBUSTOS) ---
 function onCanvasTouchStart(e) {
+    e.preventDefault(); // Impede scroll indesejado ao interagir com o canvas
     if (e.touches.length === 1) {
         let touch = e.touches[0];
         let rect = canvas.getBoundingClientRect();
@@ -603,14 +614,15 @@ function onCanvasTouchStart(e) {
         touchStartTime = Date.now();
         touchMoved = false;
         mousePosCanvas = { x, y };
-        touchOnPoint = !!obterPontoProximoMouse(x, y);
         
-        if (!touchOnPoint) {
+        let pontoTocado = obterPontoProximoMouse(x, y);
+        touchOnPoint = !!pontoTocado;
+        
+        if (!touchOnPoint || window.modoCroqui === 'pan') {
             isDragging = true;
             startDragX = touch.clientX - panOffsetX;
             startDragY = touch.clientY - panOffsetY;
         }
-        e.preventDefault();
     } else if (e.touches.length === 2) {
         isDragging = false;
         touchOnPoint = false;
@@ -618,11 +630,11 @@ function onCanvasTouchStart(e) {
         let t2 = e.touches[1];
         initialPinchDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
         initialZoomScale = zoomScale;
-        e.preventDefault();
     }
 }
 
 function onCanvasTouchMove(e) {
+    e.preventDefault(); // Impede comportamento padrão de rolagem nativa da página
     if (e.touches.length === 1) {
         let touch = e.touches[0];
         let rect = canvas.getBoundingClientRect();
@@ -630,21 +642,18 @@ function onCanvasTouchMove(e) {
         let y = touch.clientY - rect.top;
         mousePosCanvas = { x, y };
         
-        if (Math.abs(x - touchStartX) > 5 || Math.abs(y - touchStartY) > 5) {
+        if (Math.abs(x - touchStartX) > 6 || Math.abs(y - touchStartY) > 6) {
             touchMoved = true;
         }
         
-        if (isDragging || (touchMoved && !touchOnPoint)) {
-            isDragging = true;
+        if (isDragging && (!touchOnPoint || window.modoCroqui === 'pan')) {
             panOffsetX = touch.clientX - startDragX;
             panOffsetY = touch.clientY - startDragY;
             desenharCroqui();
         } else if (window.pontoSelecionadoInicio || modoArea) {
             desenharCroqui();
         }
-        e.preventDefault();
     } else if (e.touches.length === 2) {
-        e.preventDefault();
         let t1 = e.touches[0];
         let t2 = e.touches[1];
         let currentDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -665,12 +674,15 @@ function onCanvasTouchMove(e) {
 }
 
 function onCanvasTouchEnd(e) {
+    e.preventDefault();
     if (e.touches.length === 0) {
-        if (!touchMoved && touchStartTime && (Date.now() - touchStartTime < 300)) {
+        // Se foi um toque rápido sem arrastar muito, simula o clique em cima do ponto
+        if (!touchMoved && touchStartTime && (Date.now() - touchStartTime < 350)) {
             let pontoTocado = obterPontoProximoMouse(touchStartX, touchStartY);
             if (pontoTocado) {
-                if (modoArea) adicionarPontoArea(pontoTocado);
-                else if (window.modoCroqui === 'linha' || window.modoCroqui === 'medir') {
+                if (modoArea) {
+                    adicionarPontoArea(pontoTocado);
+                } else if (window.modoCroqui === 'linha' || window.modoCroqui === 'medir') {
                     processarSelecaoPonto(pontoTocado);
                 }
             }
@@ -762,5 +774,3 @@ window.trocarSessaoUI = trocarSessaoUI;
 window.criarNovaSessaoUI = criarNovaSessaoUI;
 window.excluirSessaoAtualUI = excluirSessaoAtualUI;
 window.salvarSessoesStorage = salvarSessoesStorage;
-
-console.log('✓ Todas as funções do core.js e sessions.js expostas globalmente');
